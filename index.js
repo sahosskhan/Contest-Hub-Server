@@ -3,7 +3,7 @@ const app = express();
 const cors = require('cors');
 require('dotenv').config()
 const port = process.env.PORT || 5000;
-
+const jwt = require('jsonwebtoken')
 // console.log(process.env.DB_USER)
 // console.log(process.env.DB_PASS)
 
@@ -12,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.x63gjwg.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -28,6 +28,38 @@ async function run() {
   try {
 
     const CommunityCollection = client.db("ContestHubDB").collection("Community");
+    const userCollection = client.db("ContestHubDB").collection("Users");
+//jwt crate
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.TOKEN, { expiresIn: "2h" });
+      res.send({ token });
+    });
+
+
+    const verifyToken = (req, res, next) => {
+      // console.log("inside verify token", req.headers.authorization);
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      jwt.verify(token, process.env.Token, (err, decoded) => {
+        if (err) {
+          return res.status(401).send({ message: "unauthorized access" });
+        }
+        req.decoded = decoded;
+        next();
+      });
+    };
+
+
+
+
+
+
+
+
+
 //add community post
 app.post("/add-community-post", async (req, res) => {
     try {
@@ -42,8 +74,42 @@ app.post("/add-community-post", async (req, res) => {
     }
    });
 
+
+
+
+
+   
    app.get("/community-post", async (req, res) => {
     const result = await CommunityCollection.find().toArray();
+    res.send(result);
+  });
+  //user collection
+  app.get("/users",verifyToken, async (req, res) => {
+    const result = await userCollection.find().toArray();
+    res.send(result);
+  });
+
+  // make admin
+  app.patch("/users/admin/:id", verifyToken, async  (req, res) => {
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id)};
+    const updatedDoc = {
+      $set: {
+        role: "admin",
+      },
+    };
+    const result = await userCollection.updateOne(filter, updatedDoc);
+    res.send(result);
+  });
+
+  app.post("/users", async (req, res) => {
+    const user = req.body;
+    const query = { email: user.email };
+    const existingUser = await userCollection.findOne(query);
+    if (existingUser) {
+      return res.send({ message: "User already exists", insertedInd: null });
+    }
+    const result = await userCollection.insertOne(user);
     res.send(result);
   });
 
