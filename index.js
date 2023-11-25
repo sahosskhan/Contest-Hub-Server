@@ -28,7 +28,24 @@ async function run() {
   try {
 
     const CommunityCollection = client.db("ContestHubDB").collection("Community");
+//add community post
+app.post("/add-community-post", async (req, res) => {
+    try {
+     const PostAdd = req.body;
+     console.log(PostAdd);
+     const result = await CommunityCollection.insertOne(PostAdd);
+     res.send(result);
+    }
+     catch (error) {
+       console.log(error);
+     
+    }
+   });
 
+   app.get("/community-post", async (req, res) => {
+    const result = await CommunityCollection.find().toArray();
+    res.send(result);
+  });
 
 
     // Connect the client to the server	(optional starting in v4.7)
@@ -42,3 +59,14 @@ async function run() {
   }
 }
 run().catch(console.dir);
+
+
+
+
+app.get('/', (req, res) => {
+    res.send('🎯 Welcome to Contest Hub Server🗄️')
+  })
+  
+  app.listen(port, () => {
+    console.log(`Contest Hub is working on port ${port}`);
+  })
