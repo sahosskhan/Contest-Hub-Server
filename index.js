@@ -52,7 +52,48 @@ async function run() {
       });
     };
 
+///check admin
+app.get("/users/admin/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+  if (email !== req.decoded.email) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+  const query = { email: email };
+  const user = await userCollection.findOne(query);
+  let admin = false;
+  if (user) {
+    admin = user?.role === "admin";
+  }
+  res.send({ admin });
+});
 
+app.get("/users/creator/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+  if (email !== req.decoded.email) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+  const query = { email: email };
+  const user = await userCollection.findOne(query);
+  let creator= false;
+  if (user) {
+    creator = user?.role === "creator";
+  }
+  res.send({ creator });
+});
+
+app.get("/users/user/:email", verifyToken, async (req, res) => {
+  const email = req.params.email;
+  if (email !== req.decoded.email) {
+    return res.status(403).send({ message: "forbidden access" });
+  }
+  const query = { email: email };
+  const user = await userCollection.findOne(query);
+  let useR= false;
+  if (user) {
+    useR = user?.role === "useR";
+  }
+  res.send({ useR });
+});
 
 
 
@@ -96,6 +137,30 @@ app.post("/add-community-post", async (req, res) => {
     const updatedDoc = {
       $set: {
         role: "admin",
+      },
+    };
+    const result = await userCollection.updateOne(filter, updatedDoc);
+    res.send(result);
+  });
+///make creator
+  app.patch("/users/creator/:id", verifyToken, async  (req, res) => {
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id)};
+    const updatedDoc = {
+      $set: {
+        role: "creator",
+      },
+    };
+    const result = await userCollection.updateOne(filter, updatedDoc);
+    res.send(result);
+  });
+///make user
+  app.patch("/users/user/:id", verifyToken, async  (req, res) => {
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id)};
+    const updatedDoc = {
+      $set: {
+        role: "user",
       },
     };
     const result = await userCollection.updateOne(filter, updatedDoc);
