@@ -29,6 +29,8 @@ async function run() {
 
     const CommunityCollection = client.db("ContestHubDB").collection("Community");
     const userCollection = client.db("ContestHubDB").collection("Users");
+    const contestCollection = client.db("ContestHubDB").collection("Contest");
+    const SubmitCollection = client.db("ContestHubDB").collection("Submit");
 //jwt crate
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -66,7 +68,7 @@ app.get("/users/admin/:email", verifyToken, async (req, res) => {
   }
   res.send({ admin });
 });
-
+/// check creator permissions
 app.get("/users/creator/:email", verifyToken, async (req, res) => {
   const email = req.params.email;
   if (email !== req.decoded.email) {
@@ -81,22 +83,40 @@ app.get("/users/creator/:email", verifyToken, async (req, res) => {
   res.send({ creator });
 });
 
-app.get("/users/user/:email", verifyToken, async (req, res) => {
-  const email = req.params.email;
-  if (email !== req.decoded.email) {
-    return res.status(403).send({ message: "forbidden access" });
-  }
-  const query = { email: email };
-  const user = await userCollection.findOne(query);
-  let useR= false;
-  if (user) {
-    useR = user?.role === "useR";
-  }
-  res.send({ useR });
+
+    // use verify  after verifyToken
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isAdmin = user?.role === 'admin';
+      if (!isAdmin) {
+        return res.status(403).send({ message: 'forbidden access' });
+      }
+      next();
+    }
+    const verifyCreator = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await userCollection.findOne(query);
+      const isCreator = user?.role === 'creator';
+      if (!isCreator) {
+        return res.status(403).send({ message: 'forbidden access' });
+      }
+      next();
+    }
+
+    
+//user collection for admin
+app.get("/users",verifyToken,verifyAdmin, async (req, res) => {
+  const result = await userCollection.find().toArray();
+  res.send(result);
 });
-
-
-
+//user collection for creator
+app.get("/creator",verifyToken,verifyCreator, async (req, res) => {
+  const result = await userCollection.find().toArray();
+  res.send(result);
+});
 
 
 
@@ -114,21 +134,120 @@ app.post("/add-community-post", async (req, res) => {
      
     }
    });
+///submissions post
+   app.post("/contestSubmission", async (req, res) => {
+    try {
+     const ContestSubmitAdd = req.body;
+ const {id,pcount}=ContestSubmitAdd
+     const result = await SubmitCollection.insertOne(ContestSubmitAdd);
+     const filter = { _id: new ObjectId(id)};
+     const options = { upsert: true };
+     const updatedDoc ={
+      $set: {
+        pcount:(Number(pcount)+1).toString()
+      }
+     }
+     const updated = await contestCollection.updateOne(filter, updatedDoc,options);
+     res.send(result);
+    }
+     catch (error) {
+       console.log(error);
+     
+    }
+   });
 
 
 
 
+   app.post("/add-contest", async (req, res) => {
+    try {
+     const ContestAdd = req.body;
+     console.log(ContestAdd);
+     const result = await contestCollection.insertOne(ContestAdd);
+     res.send(result);
+    }
+     catch (error) {
+       console.log(error);
+     
+    }
+   });
+   app.get("/added-contest", async (req, res) => {
+    const result = await contestCollection.find().toArray();
+    res.send(result);
+  });
+ 
+  app.delete("/contest-delete/:id", async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await contestCollection.deleteOne(query);
+    res.send(result);
+  });
+  app.get("/contest-update/:id", async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await contestCollection.findOne(query);
+    res.send(result);
+  });
 
-   
+  app.get("/addedContestUser/:id", async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await contestCollection.findOne(query);
+    res.send(result);
+  });
+
+  app.put("/updatedContest/:id", async (req, res) =>{
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id) };
+    const options = { upsert: true };
+    const updateContent = req.body;
+    const content = {
+      $set: {
+        creatorName:updateContent.creatorName,
+         creatorEmail:updateContent.creatorEmail,
+         creatorImage:updateContent.creatorImage,
+         status:updateContent.status,
+         pcount:updateContent.pcount,
+          nameContest:updateContent.nameContest,
+          price:updateContent.price,
+          money:updateContent.money,
+          imageContest:updateContent.imageContest,
+          tags:updateContent.tags,
+          deadline:updateContent.deadline,
+          description:updateContent.description, 
+          submission:updateContent.submission,
+      },
+    };
+    const result = await contestCollection.updateOne(
+      filter,
+      content,
+      options
+    );
+    res.send(result);
+  });
+
+
+  app.patch("/contest-patch/:id",verifyToken, verifyAdmin, async (req, res) => {
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id)};
+    const updatedDoc = {
+      $set:{
+        status: "approved",
+      },
+    }
+    const result = await contestCollection.updateOne(filter,updatedDoc);
+    console.log(result);
+    res.send(result);
+    
+  });
+
+
+
    app.get("/community-post", async (req, res) => {
     const result = await CommunityCollection.find().toArray();
     res.send(result);
   });
-  //user collection
-  app.get("/users",verifyToken, async (req, res) => {
-    const result = await userCollection.find().toArray();
-    res.send(result);
-  });
+
 
   // make admin
   app.patch("/users/admin/:id", verifyToken, async  (req, res) => {
