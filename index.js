@@ -147,7 +147,7 @@ app.post("/add-community-post", async (req, res) => {
      const options = { upsert: true };
      const updatedDoc ={
       $set: {
-        pcount:(Number(pcount)+1).toString()
+        pcount:(Number(pcount)+1)
       }
      }
      const updated = await contestCollection.updateOne(filter, updatedDoc,options);
@@ -178,6 +178,14 @@ app.post("/add-community-post", async (req, res) => {
     const result = await contestCollection.find().toArray();
     res.send(result);
   });
+
+  app.get("/added-contest-sort", async (req, res) => {
+    
+    const result =  await contestCollection.find({status:"approved"}).sort({pcount:-1}).limit(5).toArray();
+
+    res.send(result);
+  });
+
   app.get("/added-submission", async (req, res) => {
     const result = await SubmitCollection.find().toArray();
     res.send(result);
