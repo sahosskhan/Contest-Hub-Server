@@ -2,6 +2,7 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 require('dotenv').config()
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken')
 // console.log(process.env.DB_USER)
@@ -31,6 +32,7 @@ async function run() {
     const userCollection = client.db("ContestHubDB").collection("Users");
     const contestCollection = client.db("ContestHubDB").collection("Contest");
     const SubmitCollection = client.db("ContestHubDB").collection("Submit");
+    const paymentsCollections = client.db("ContestHubDB").collection("Payments");
 //jwt crate
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -45,7 +47,7 @@ async function run() {
         return res.status(401).send({ message: "unauthorized access" });
       }
       const token = req.headers.authorization.split(" ")[1];
-      jwt.verify(token, process.env.Token, (err, decoded) => {
+      jwt.verify(token, process.env.TOKEN, (err, decoded) => {
         if (err) {
           return res.status(401).send({ message: "unauthorized access" });
         }
@@ -105,8 +107,9 @@ app.get("/users/creator/:email", verifyToken, async (req, res) => {
       }
       next();
     }
+  
 
-    
+ 
 //user collection for admin
 app.get("/users",verifyToken,verifyAdmin, async (req, res) => {
   const result = await userCollection.find().toArray();
@@ -175,7 +178,18 @@ app.post("/add-community-post", async (req, res) => {
     const result = await contestCollection.find().toArray();
     res.send(result);
   });
- 
+  app.get("/added-submission", async (req, res) => {
+    const result = await SubmitCollection.find().toArray();
+    res.send(result);
+  });
+
+  app.get("/submited-contest/:id", async (req, res) => {
+    const id = req.params.id;
+    const query = {_id :new ObjectId(id)}
+    const result = await SubmitCollection.findOne(query);
+    res.send(result);
+  });
+
   app.delete("/contest-delete/:id", async (req, res) => {
     const id = req.params.id;
     const query = { _id: new ObjectId(id) };
@@ -195,6 +209,7 @@ app.post("/add-community-post", async (req, res) => {
     const result = await contestCollection.findOne(query);
     res.send(result);
   });
+
 
   app.put("/updatedContest/:id", async (req, res) =>{
     const id = req.params.id;
@@ -241,12 +256,76 @@ app.post("/add-community-post", async (req, res) => {
     
   });
 
+  app.patch("/winner-patch/:id", async (req, res) => {
+const {...data} = req.body
+    console.log(data)
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id) };
+    const options = { upsert: true };
+    const updatedDoc = {
+      $set: {
+        winingStatus: "winner",
+      },
+    };
+
+    const result = await SubmitCollection.updateOne(filter,updatedDoc,options);
+const filter2 = {_id: new ObjectId(data.id)}; 
+const updatedDoc2 ={
+  $set:{
+    winingStatus: "winner",
+winnerName: data.yourName,
+winnerImage: data.yourImage,
+  }
+}
+const result2 = await contestCollection.updateOne(filter2,updatedDoc2,options);
+res.json({result, result2})
+  });
+
+
+
+
+
 
 
    app.get("/community-post", async (req, res) => {
     const result = await CommunityCollection.find().toArray();
     res.send(result);
   });
+
+  app.get("/user-list", async (req, res) => {
+    const result = await userCollection.find().toArray();
+    res.send(result);
+  });
+
+ 
+
+
+
+  app.get("/user-list-update/:id", async (req, res) => {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await userCollection.findOne(query);
+    res.send(result);
+  });
+  app.put("/update-user-list/:id", async (req, res) =>{
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id) };
+    const options = { upsert: true };
+    const updateContent = req.body;
+    const content = {
+      $set: {
+       name:updateContent.username,
+       image: updateContent.userimage
+      },
+    };
+    const result = await userCollection.updateOne(
+      filter,
+      content,
+      options
+    );
+    res.send(result);
+  });
+
 
 
   // make admin
@@ -296,11 +375,44 @@ app.post("/add-community-post", async (req, res) => {
     const result = await userCollection.insertOne(user);
     res.send(result);
   });
+  app.post("/create-payment-intent",  async (req, res) => {
+    const data = req.body;
+    const price = data?.price;
+    const amount = Number(price) * 100;
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      currency: "usd",
+      amount: amount,
+      payment_method_types: ["card"],
+    });
+    res.send({
+      clientSecret: paymentIntent.client_secret,
+    });
+  });
+
+  app.post("/payments",   async (req, res) => {
+    const payment = req.body;
+    const result = await paymentsCollections.insertOne(payment);
+    const id = payment.id;
+    const filter = { _id: new ObjectId(id) };
+    const options = {upsert: true };
+    const updatedDoc = {
+      $set: {
+        paymentStatus:"paid",
+        transId: payment.transId,
+      },
+    };
+    const updatedResult = await SubmitCollection.updateOne(
+      filter,
+      updatedDoc,
+      options
+    );
+    res.send(result);
+  });
 
 
-    // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
-    // Send a ping to confirm a successful connection
+
     // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
